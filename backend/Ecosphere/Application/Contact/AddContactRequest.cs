@@ -6,7 +6,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
-namespace Ecosphere.Application.Contact;
+namespace Ecosphere.Application.Contacts;
 
 public class AddContactRequest : IRequest<BaseResponse<string>>
 {

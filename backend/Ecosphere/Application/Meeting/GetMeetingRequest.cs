@@ -4,7 +4,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace Ecosphere.Application.Meeting;
+namespace Ecosphere.Application.Meetings;
 
 public class GetMeetingRequest : IRequest<BaseResponse<MeetingDto>>
 {

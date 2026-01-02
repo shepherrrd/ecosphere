@@ -6,7 +6,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
-namespace Ecosphere.Application.Meeting;
+namespace Ecosphere.Application.Meetings;
 
 public class JoinMeetingRequest : IRequest<BaseResponse<string>>
 {

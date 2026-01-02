@@ -1,4 +1,4 @@
-using Ecosphere.Application.Meeting;
+using Ecosphere.Application.Meetings;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
