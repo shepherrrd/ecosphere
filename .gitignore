@@ -1,0 +1,94 @@
+# .gitignore for C# (.NET) and Node.js projects
+
+# Build results
+bin/
+obj/
+out/
+[Bb]uild/
+[Ll]og/
+*.log
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# MonoDevelop
+*.pidb
+*.userprefs
+
+# Visual Studio Code
+.vscode/
+.history/
+
+# Rider
+.idea/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+
+
+# DotCover
+*.dotCover
+
+# Azure
+*.azurePubxml
+*.publishsettings
+*.Publish.xml
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# OS generated files
+.DS_Store
+*.swp
+*.swo
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log
+
+# Environment files
+.env
+.env.*
+
+# Coverage
+coverage/
+.nyc_output/
+coverage-final.json
+
+# Misc
+dist/
+tmp/
+temp/
+.cache/
+*.tgz
+
+# Optional: Ignore test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Optional: Ignore local tools
+.localtoolstarget
+backend/Ecosphere/appsettings.json
