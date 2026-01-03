@@ -1,0 +1,23 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main  
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: executing remote ssh commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script_stop: true  
+          script: |
+            cd /root/projects/csharp/ecosphere
+            chmod +x deploy.sh
+            ./deploy.sh > /dev/null 2>&1  
