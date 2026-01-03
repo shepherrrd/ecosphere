@@ -130,7 +130,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // Disable HTTPS redirection in development for local network access
-// app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 app.UseCors("EcosphereCorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
