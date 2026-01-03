@@ -60,7 +60,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("EcosphereCorsPolicy", policy =>
     {
         policy.WithOrigins(
-                "http://localhost:3000"        
+                "http://localhost:3000" ,
+                "http://192.168.106:3000"  ,
+                "https://2ndpw4s3-3000.uks1.devtunnels.ms",
+                "https://meet.shepherrd.dev"    
               )
               .AllowAnyMethod()
               .AllowAnyHeader()
@@ -131,7 +134,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("EcosphereCorsPolicy");
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
