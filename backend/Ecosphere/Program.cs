@@ -137,8 +137,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Map SignalR Hubs
-app.MapHub<CallHub>("/callHub");
-app.MapHub<MeetingHub>("/meetingHub");
-app.MapHub<SFUHub>("/sfuHub");
+app.MapHub<CallHub>("/hubs/callHub");
+app.MapHub<MeetingHub>("/hubs/meetingHub");
+app.MapHub<SFUHub>("/hubs/sfuHub");
 
 app.Run();
