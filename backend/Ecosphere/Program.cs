@@ -129,16 +129,17 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Disable HTTPS redirection in development for local network access
-app.UseHttpsRedirection();
 app.UseCors("EcosphereCorsPolicy");
+
+app.UseHttpsRedirection();
+
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapControllers();
 
-// Map SignalR Hubs
 app.MapHub<CallHub>("/hubs/callHub");
 app.MapHub<MeetingHub>("/hubs/meetingHub");
 app.MapHub<SFUHub>("/hubs/sfuHub");
+
+app.MapControllers();
 
 app.Run();
