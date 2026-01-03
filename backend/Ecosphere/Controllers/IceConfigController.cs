@@ -35,8 +35,7 @@ public class IceConfigController : ControllerBase
             var iceServers = new List<IceServerConfig>();
 
             // Add local STUN/TURN servers if running
-            if (_stunTurnServer.IsRunning)
-            {
+            
                 var stunConfig = _stunTurnServer.GetStunConfig();
                 var turnConfig = _stunTurnServer.GetTurnConfig(userId);
 
@@ -54,11 +53,7 @@ public class IceConfigController : ControllerBase
                     Username = turnConfig.Username,
                     Credential = turnConfig.Credential
                 });
-            }
-            else
-            {
-                _logger.LogWarning("[ICE] Local STUN/TURN server is not running");
-            }
+            
 
             // Add Metered TURN servers with cached credentials (expires every 30 minutes)
             var meteredServers = await _meteredTurnService.GetMeteredIceServersAsync(userId);

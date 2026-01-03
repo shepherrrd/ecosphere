@@ -122,7 +122,7 @@ public class StunTurnServer : IStunTurnServer, IHostedService
         catch (Exception ex)
         {
             _logger.LogError(ex, "[STUN/TURN] Failed to start servers");
-            return true;
+            return false;
         }
     }
 
