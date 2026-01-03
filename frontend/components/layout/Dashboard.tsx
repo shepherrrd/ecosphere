@@ -157,6 +157,11 @@ export default function Dashboard() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
+
   // Show call UI when in a call
   if (callState === CallState.IncomingCall) {
     return <IncomingCallModal />;
@@ -182,7 +187,7 @@ export default function Dashboard() {
             </p>
           </div>
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors duration-200"
           >
             Logout

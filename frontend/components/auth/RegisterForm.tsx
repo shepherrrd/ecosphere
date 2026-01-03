@@ -34,8 +34,8 @@ export default function RegisterForm({ onSwitchToLogin }: { onSwitchToLogin: () 
       validationErrors.push("Password must contain at least one number");
     }
 
-    if (!/[!@#$%&^]/.test(password)) {
-      validationErrors.push("Password must contain at least one special character (!@#$%&^)");
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      validationErrors.push("Password must contain at least one special character (!@#$%^&*()_+-=[]{};':\"\\|,.<>/?)");
     }
 
     return validationErrors;

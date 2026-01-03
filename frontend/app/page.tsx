@@ -1,19 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
-import Dashboard from "@/components/layout/Dashboard";
+import LandingPage from "@/components/landing/LandingPage";
 
 export default function HomePage() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/auth");
-    }
-  }, [isAuthenticated, isLoading, router]);
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -23,9 +14,5 @@ export default function HomePage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  return <Dashboard />;
+  return <LandingPage />;
 }
