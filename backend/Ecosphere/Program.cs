@@ -59,10 +59,13 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("EcosphereCorsPolicy", policy =>
     {
-        policy.SetIsOriginAllowed(origin => true)
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        policy.WithOrigins(
+                "http://localhost:3000",           
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    
     });
 });
 
