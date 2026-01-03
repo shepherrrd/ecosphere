@@ -83,7 +83,7 @@ public static class Extensions
                     var path = context.HttpContext.Request.Path;
 
                     if (!string.IsNullOrEmpty(accessToken) &&
-                        (path.StartsWithSegments("/callHub") || path.StartsWithSegments("/meetingHub") || path.StartsWithSegments("/sfuHub")))
+                        (path.StartsWithSegments("/hubs/callHub") || path.StartsWithSegments("/hubs/meetingHub") || path.StartsWithSegments("/hubs/sfuHub")))
                     {
                         context.Token = accessToken;
                     }
