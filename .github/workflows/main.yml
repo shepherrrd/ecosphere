@@ -19,4 +19,4 @@ jobs:
           script_stop: true  
           script: |
             cd /root/projects/csharp/ecosphere
-            ./deploy.sh  
+            ./deploy.sh  > /dev/null 2>&1 
