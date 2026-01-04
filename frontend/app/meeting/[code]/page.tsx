@@ -95,10 +95,17 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       const httpJoinResponse = await apiService.joinMeeting(meetingCode);
       console.log("HTTP Join response:", httpJoinResponse);
 
+      // Handle "already in meeting" or "already pending" as success (React Strict Mode double-mount)
       if (!httpJoinResponse.status) {
-        alert(httpJoinResponse.message || "Failed to join meeting");
-        router.push("/dashboard");
-        return;
+        const isAlreadyJoined = httpJoinResponse.message?.includes("already in this meeting") ||
+                                 httpJoinResponse.message?.includes("already have a pending join request");
+        if (!isAlreadyJoined) {
+          alert(httpJoinResponse.message || "Failed to join meeting");
+          router.push("/dashboard");
+          return;
+        }
+        // If already joined/pending, continue with the flow
+        console.log("Already joined or pending, continuing...");
       }
 
       // Connect to SignalR
