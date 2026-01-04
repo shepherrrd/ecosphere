@@ -6,24 +6,9 @@ import {
   Contact,
   IceServerConfig,
 } from "../types";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+import { apiGet, apiPost } from "../utils/apiClient";
 
 class ApiService {
-  private getHeaders(includeAuth: boolean = false): HeadersInit {
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-
-    if (includeAuth) {
-      const token = this.getToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    return headers;
-  }
 
   getToken(): string | null {
     if (typeof window === "undefined") return null;
@@ -58,14 +43,14 @@ class ApiService {
 
   async login(request: LoginRequest): Promise<BaseResponse<AuthResponse>> {
     console.log("Login request:", request);
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(request),
-    });
 
-    console.log("Login response status:", response.status);
-    const data: BaseResponse<AuthResponse> = await response.json();
+    const data = await apiPost<BaseResponse<AuthResponse>>(
+      '/auth/login',
+      request,
+      undefined,
+      { skipAuth: true }
+    );
+
     console.log("Login response data:", data);
 
     if (data.status && data.data) {
@@ -79,14 +64,14 @@ class ApiService {
 
   async register(request: RegisterRequest): Promise<BaseResponse<AuthResponse>> {
     console.log("Register request:", request);
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify(request),
-    });
 
-    console.log("Register response status:", response.status);
-    const data: BaseResponse<AuthResponse> = await response.json();
+    const data = await apiPost<BaseResponse<AuthResponse>>(
+      '/auth/register',
+      request,
+      undefined,
+      { skipAuth: true }
+    );
+
     console.log("Register response data:", data);
 
     if (data.status && data.data) {
@@ -104,108 +89,128 @@ class ApiService {
       return { status: false, message: "No refresh token found", data: undefined };
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/RefreshToken`, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify({ refreshToken }),
-    });
+    try {
+      const data = await apiPost<BaseResponse<{ token: string; refreshToken: string }>>(
+        '/auth/RefreshToken',
+        { refreshToken },
+        undefined,
+        { skipAuth: true }
+      );
 
-    if (!response.ok) {
+      if (data.status && data.data) {
+        this.setToken(data.data.token);
+        this.setRefreshToken(data.data.refreshToken);
+      }
+
+      return data;
+    } catch (error) {
       return { status: false, message: "Failed to refresh token", data: undefined };
     }
-
-    const data = await response.json();
-
-    if (data.status && data.data) {
-      this.setToken(data.data.token);
-      this.setRefreshToken(data.data.refreshToken);
-    }
-
-    return data;
   }
 
   async getContacts(): Promise<BaseResponse<Contact[]>> {
-    const response = await fetch(`${API_BASE_URL}/contact`, {
-      method: "GET",
-      headers: this.getHeaders(true),
-    });
-
-    return await response.json();
+    return await apiGet<BaseResponse<Contact[]>>('/contact', this.getToken() || undefined);
   }
 
   async sendContactRequest(username: string): Promise<BaseResponse<string>> {
-    const response = await fetch(`${API_BASE_URL}/contact/request`, {
-      method: "POST",
-      headers: this.getHeaders(true),
-      body: JSON.stringify({ username }),
-    });
-
-    return await response.json();
+    return await apiPost<BaseResponse<string>>(
+      '/contact/request',
+      { username },
+      this.getToken() || undefined
+    );
   }
 
   async getPendingContactRequests(): Promise<BaseResponse<any[]>> {
-    const response = await fetch(`${API_BASE_URL}/contact/requests/pending`, {
-      method: "GET",
-      headers: this.getHeaders(true),
-    });
-
-    return await response.json();
+    return await apiGet<BaseResponse<any[]>>(
+      '/contact/requests/pending',
+      this.getToken() || undefined
+    );
   }
 
   async approveContactRequest(requestId: number): Promise<BaseResponse<string>> {
-    const response = await fetch(`${API_BASE_URL}/contact/request/${requestId}/approve`, {
-      method: "POST",
-      headers: this.getHeaders(true),
-    });
-
-    return await response.json();
+    return await apiPost<BaseResponse<string>>(
+      `/contact/request/${requestId}/approve`,
+      {},
+      this.getToken() || undefined
+    );
   }
 
   async rejectContactRequest(requestId: number): Promise<BaseResponse<string>> {
-    const response = await fetch(`${API_BASE_URL}/contact/request/${requestId}/reject`, {
-      method: "POST",
-      headers: this.getHeaders(true),
-    });
-
-    return await response.json();
+    return await apiPost<BaseResponse<string>>(
+      `/contact/request/${requestId}/reject`,
+      {},
+      this.getToken() || undefined
+    );
   }
 
   async createMeeting(title: string, description?: string, maxParticipants: number = 50, isPublic: boolean = false): Promise<BaseResponse<any>> {
-    const response = await fetch(`${API_BASE_URL}/meeting`, {
-      method: "POST",
-      headers: this.getHeaders(true),
-      body: JSON.stringify({ title, description, maxParticipants, isPublic }),
-    });
-
-    return await response.json();
+    return await apiPost<BaseResponse<any>>(
+      '/meeting',
+      { title, description, maxParticipants, isPublic },
+      this.getToken() || undefined
+    );
   }
 
   async joinMeeting(meetingCode: string): Promise<BaseResponse<string>> {
-    const response = await fetch(`${API_BASE_URL}/meeting/join`, {
-      method: "POST",
-      headers: this.getHeaders(true),
-      body: JSON.stringify({ meetingCode }),
-    });
-
-    return await response.json();
+    return await apiPost<BaseResponse<string>>(
+      '/meeting/join',
+      { meetingCode },
+      this.getToken() || undefined
+    );
   }
 
   async getMeeting(meetingCode: string): Promise<BaseResponse<any>> {
-    const response = await fetch(`${API_BASE_URL}/meeting/${meetingCode}`, {
-      method: "GET",
-      headers: this.getHeaders(true),
-    });
-
-    return await response.json();
+    return await apiGet<BaseResponse<any>>(
+      `/meeting/${meetingCode}`,
+      this.getToken() || undefined
+    );
   }
 
   async getIceServers(): Promise<BaseResponse<IceServerConfig[]>> {
-    const response = await fetch(`${API_BASE_URL}/iceconfig`, {
-      method: "GET",
-      headers: this.getHeaders(true),
-    });
+    return await apiGet<BaseResponse<IceServerConfig[]>>(
+      '/iceconfig',
+      this.getToken() || undefined
+    );
+  }
 
-    return await response.json();
+  // Message endpoints
+  async getMessages(contactUserId: number, pageSize: number = 50, beforeMessageId?: number): Promise<BaseResponse<any[]>> {
+    const params = new URLSearchParams();
+    if (pageSize) params.append('pageSize', pageSize.toString());
+    if (beforeMessageId) params.append('beforeMessageId', beforeMessageId.toString());
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return await apiGet<BaseResponse<any[]>>(
+      `/message/conversation/${contactUserId}${query}`,
+      this.getToken() || undefined
+    );
+  }
+
+  async getMeetingMessages(meetingId: number, pageSize: number = 100, beforeMessageId?: number): Promise<BaseResponse<any[]>> {
+    const params = new URLSearchParams();
+    if (pageSize) params.append('pageSize', pageSize.toString());
+    if (beforeMessageId) params.append('beforeMessageId', beforeMessageId.toString());
+
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return await apiGet<BaseResponse<any[]>>(
+      `/message/meeting/${meetingId}${query}`,
+      this.getToken() || undefined
+    );
+  }
+
+  async sendMessage(receiverId: number, content: string, meetingId?: number): Promise<BaseResponse<any>> {
+    return await apiPost<BaseResponse<any>>(
+      '/message/send',
+      { receiverId, content, meetingId },
+      this.getToken() || undefined
+    );
+  }
+
+  async getUnreadMessageCounts(): Promise<BaseResponse<Record<number, number>>> {
+    return await apiGet<BaseResponse<Record<number, number>>>(
+      '/message/unread-counts',
+      this.getToken() || undefined
+    );
   }
 
   logout(): void {

@@ -1,4 +1,5 @@
 using Ecosphere.Application.Meetings;
+using Ecosphere.Infrastructure.Infrastructure.Auth;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,23 +19,26 @@ public class MeetingController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateMeeting([FromBody] CreateMeetingRequest request)
+    [AuthorizeRole("User")]
+    public async Task<IActionResult> CreateMeeting([FromBody] CreateMeetingRequest request, CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(request);
+        var result = await _mediator.Send(request, cancellationToken);
         return Ok(result);
     }
 
     [HttpPost("join")]
-    public async Task<IActionResult> JoinMeeting([FromBody] JoinMeetingRequest request)
+    [AuthorizeRole("User")]
+    public async Task<IActionResult> JoinMeeting([FromBody] JoinMeetingRequest request, CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(request);
+        var result = await _mediator.Send(request, cancellationToken);
         return Ok(result);
     }
 
     [HttpGet("{meetingCode}")]
-    public async Task<IActionResult> GetMeeting(string meetingCode)
+    [AuthorizeRole("User")]
+    public async Task<IActionResult> GetMeeting(string meetingCode, CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(new GetMeetingRequest { MeetingCode = meetingCode });
+        var result = await _mediator.Send(new GetMeetingRequest { MeetingCode = meetingCode }, cancellationToken);
         return Ok(result);
     }
 }

@@ -43,6 +43,8 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initializingRef = useRef<boolean>(false);
+  const initializedRef = useRef<boolean>(false);
 
   useEffect(() => {
     // Wait for user to be loaded from Auth context before initializing meeting
@@ -51,10 +53,21 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       return;
     }
 
+    // Prevent double initialization in React Strict Mode
+    if (initializingRef.current || initializedRef.current) {
+      console.log("[WebRTC] Already initializing or initialized, skipping duplicate call");
+      return;
+    }
+
+    initializingRef.current = true;
     initializeMeeting();
 
     return () => {
-      cleanup();
+      // Only cleanup if we're actually unmounting (navigating away)
+      // Don't cleanup during React Strict Mode's double-mount
+      if (initializedRef.current) {
+        cleanup();
+      }
     };
   }, [meetingCode, user]);
 
@@ -78,15 +91,25 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       setLocalStream(stream);
       localStreamRef.current = stream;
 
+      // First, join via HTTP to create participant record in database
+      const httpJoinResponse = await apiService.joinMeeting(meetingCode);
+      console.log("HTTP Join response:", httpJoinResponse);
+
+      if (!httpJoinResponse.status) {
+        alert(httpJoinResponse.message || "Failed to join meeting");
+        router.push("/dashboard");
+        return;
+      }
+
       // Connect to SignalR
       await meetingSignalRService.connect();
 
       // Setup event handlers
       setupSignalRHandlers();
 
-      // Join meeting
+      // Join meeting via SignalR for real-time updates
       const joinResult = await meetingSignalRService.joinMeeting(meetingCode);
-      console.log("Joined meeting:", joinResult);
+      console.log("SignalR Joined meeting:", joinResult);
 
       // Check if approval is required
       if (joinResult.requiresApproval) {
@@ -121,8 +144,10 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       }
 
       setIsLoading(false);
+      initializedRef.current = true;
     } catch (error) {
       console.error("Error initializing meeting:", error);
+      initializingRef.current = false; // Reset on error so user can retry
       alert("Failed to join meeting");
       router.push("/");
     }
@@ -402,7 +427,14 @@ export default function MeetingPage({ params }: MeetingPageProps) {
 
   const handleJoinRequestReceived = (data: any) => {
     console.log("[JOIN REQUEST] Received join request:", data);
-    setJoinRequests(prev => [...prev, data]);
+    setJoinRequests(prev => {
+      // Prevent duplicates by checking if request already exists
+      if (prev.some(req => req.requestId === data.requestId)) {
+        console.log("[JOIN REQUEST] Duplicate request ignored:", data.requestId);
+        return prev;
+      }
+      return [...prev, data];
+    });
   };
 
   const handleJoinRequestApproved = async (data: any) => {
@@ -826,6 +858,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
           </div>
         </div>
       )}
+
     </div>
   );
 }

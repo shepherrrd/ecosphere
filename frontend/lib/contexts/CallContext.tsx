@@ -3,9 +3,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { IncomingCallEvent, IceServerConfig } from "../types";
 import { signalRService } from "../services/signalr.service";
+import { messageHubService } from "../services/messageHub.service";
 import { webRTCService } from "../services/webrtc.service";
 import { apiService } from "../services/api.service";
 import { useAuth } from "./AuthContext";
+import { soundManager } from "../utils/soundManager";
 
 export enum CallState {
   Idle = "idle",
@@ -77,7 +79,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   // Setup SignalR event handlers
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!isAuthenticated || !user) {
+      // Only disconnect if user logs out
+      signalRService.disconnect();
+      messageHubService.disconnect();
+      return;
+    }
 
     const connectSignalR = async () => {
       try {
@@ -96,12 +103,35 @@ export function CallProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    connectSignalR();
-
-    return () => {
-      signalRService.disconnect();
+    const connectMessageHub = async () => {
+      try {
+        await messageHubService.connect({
+          onReceiveDirectMessage: (message) => {
+            console.log("[CallContext] Received direct message:", message);
+            // MessageHub events are handled in individual chat components
+          },
+          onReceiveMeetingMessage: (message) => {
+            console.log("[CallContext] Received meeting message:", message);
+            // MessageHub events are handled in meeting components
+          },
+          onMessageSent: (message) => {
+            console.log("[CallContext] Message sent confirmation:", message);
+          },
+          onMessageError: (error) => {
+            console.error("[CallContext] Message error:", error);
+          },
+        });
+      } catch (error) {
+        console.error("Failed to connect to MessageHub:", error);
+      }
     };
-  }, [isAuthenticated, user]);
+
+    connectSignalR();
+    connectMessageHub();
+
+    // Don't disconnect on cleanup - keep connections alive for navigation
+    // Only disconnect when user logs out (handled above)
+  }, [isAuthenticated, user?.id]);
 
   // Setup WebRTC stream callbacks
   useEffect(() => {
@@ -125,6 +155,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
     setCallerName(displayName);
     setIsInitiator(false); // Receiver is not the initiator
     isInitiatorRef.current = false; // Also set ref
+
+    // Play incoming call ringing sound in loop
+    soundManager.playLoop("callRinging");
   }, []);
 
   const handleCallAnswered = useCallback(async () => {
@@ -169,12 +202,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
     await webRTCService.handleOffer(event.sdp);
     setCallState(CallState.Active);
+
+    // Stop all ringing sounds when call becomes active
+    soundManager.stopLoop();
   }, []);
 
   const handleReceiveAnswer = useCallback(async (event: any) => {
     console.log("Received answer");
     await webRTCService.handleAnswer(event.sdp);
     setCallState(CallState.Active);
+
+    // Stop all ringing sounds when call becomes active
+    soundManager.stopLoop();
   }, []);
 
   const handleReceiveIceCandidate = useCallback(async (event: any) => {
@@ -200,6 +239,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
       webRTCService.setCallUuid(callUuid);
 
       setCallState(CallState.Ringing);
+
+      // Play dialing sound in loop
+      soundManager.playLoop("dialing");
     } catch (error) {
       console.error("Error initiating call:", error);
       cleanup();
@@ -277,6 +319,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
     setIsVideoEnabled(true);
     setIsInitiator(false);
     isInitiatorRef.current = false;
+
+    // Stop all sounds when call ends
+    soundManager.stopLoop();
   };
 
   return (

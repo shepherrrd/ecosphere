@@ -8,6 +8,7 @@ import {
   ReceiveIceCandidateEvent,
 } from "../types";
 import { apiService } from "./api.service";
+import { getOrCreateClientId } from "../utils/clientId";
 
 export type CallHubEventHandlers = {
   onIncomingCall?: (event: IncomingCallEvent) => void;
@@ -25,6 +26,7 @@ export type CallHubEventHandlers = {
 class SignalRService {
   private connection: signalR.HubConnection | null = null;
   private eventHandlers: CallHubEventHandlers = {};
+  private genericEventHandlers: Map<string, ((...args: any[]) => void)[]> = new Map();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
 
@@ -32,6 +34,7 @@ class SignalRService {
     this.eventHandlers = handlers;
 
     const hubUrl = process.env.NEXT_PUBLIC_HUB_URL || "http://localhost:5000/callHub";
+    const clientId = getOrCreateClientId();
 
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
@@ -42,6 +45,9 @@ class SignalRService {
             return "";
           }
           return token;
+        },
+        headers: {
+          "X-ClientId": clientId,
         },
       })
       .withAutomaticReconnect({
@@ -67,20 +73,30 @@ class SignalRService {
       console.log("SignalR Connected");
       this.reconnectAttempts = 0;
 
-      // Send device info after connection (optional - backend can still work without it)
       const deviceToken = navigator.userAgent;
       const deviceName = navigator.userAgent.substring(0, 50);
 
-      // Note: Backend might need an InitializeDevice method to receive this
-      // For now, this is just a placeholder
     } catch (err) {
       console.error("SignalR Connection Error: ", err);
       throw err;
     }
   }
 
+  private registerStoredGenericHandlers(): void {
+    if (!this.connection) return;
+
+    for (const [event, handlers] of this.genericEventHandlers.entries()) {
+      for (const handler of handlers) {
+        this.connection.on(event, handler);
+      }
+    }
+  }
+
   private registerEventHandlers(): void {
     if (!this.connection) return;
+
+    // Register generic event handlers first
+    this.registerStoredGenericHandlers();
 
     // Incoming Call
     this.connection.on("IncomingCall", (event: IncomingCallEvent) => {
@@ -94,18 +110,13 @@ class SignalRService {
       // This is sent to the caller, we can use it to show "ringing" state
     });
 
-    // Call Accepted (sent to caller when target accepts)
     this.connection.on("CallAccepted", (event: CallAnsweredEvent) => {
       console.log("Call accepted:", event);
       this.eventHandlers.onCallAnswered?.(event);
     });
 
-    // Call Connected (sent to the person who accepted the call)
     this.connection.on("CallConnected", (event: any) => {
       console.log("Call connected:", event);
-      // The receiver already created their peer connection in acceptCall
-      // They just need to wait for the offer from the initiator
-      // So we don't trigger onCallAnswered here
     });
 
     // Call Answered Elsewhere
@@ -185,11 +196,11 @@ class SignalRService {
     }
   }
 
-  async rejectCall(callUuid: string): Promise<void> {
+  async rejectCall(callUuid: string, reason?: string): Promise<void> {
     if (!this.connection) throw new Error("Not connected to SignalR hub");
 
     try {
-      await this.connection.invoke("RejectCall", callUuid);
+      await this.connection.invoke("RejectCall", callUuid, reason || "Call declined");
     } catch (err) {
       console.error("Error rejecting call:", err);
       throw err;
@@ -255,6 +266,42 @@ class SignalRService {
 
   isConnected(): boolean {
     return this.connection?.state === signalR.HubConnectionState.Connected;
+  }
+
+  // Generic event listener methods (for non-call related events like MeetingInvite, ReceiveDirectMessage)
+  on(eventName: string, handler: (...args: any[]) => void): void {
+    // Store the handler
+    const handlers = this.genericEventHandlers.get(eventName) || [];
+    handlers.push(handler);
+    this.genericEventHandlers.set(eventName, handlers);
+
+    // Register immediately if connected
+    if (this.connection) {
+      this.connection.on(eventName, handler);
+    }
+  }
+
+  off(eventName: string, handler: (...args: any[]) => void): void {
+    // Remove from stored handlers
+    const handlers = this.genericEventHandlers.get(eventName) || [];
+    const index = handlers.indexOf(handler);
+    if (index > -1) {
+      handlers.splice(index, 1);
+      this.genericEventHandlers.set(eventName, handlers);
+    }
+
+    // Unregister from connection if connected
+    if (this.connection) {
+      this.connection.off(eventName, handler);
+    }
+  }
+
+  // Generic invoke method for sending messages to the hub
+  async invoke<T = any>(methodName: string, ...args: any[]): Promise<T> {
+    if (!this.connection) {
+      throw new Error("Not connected to SignalR hub");
+    }
+    return await this.connection.invoke<T>(methodName, ...args);
   }
 }
 

@@ -10,6 +10,12 @@ public class BaseResponse
         Status = status;
         Message = message;
     }
+
+    public static BaseResponse Success(string message = "Success") =>
+        new BaseResponse(true, message);
+
+    public static BaseResponse Failure(string message = "Failed") =>
+        new BaseResponse(false, message);
 }
 
 public class BaseResponse<T>
@@ -38,6 +44,15 @@ public class BaseResponse<T>
         Message = message;
         Errors = errors;
     }
+
+    public static BaseResponse<T> Success(T data, string message = "Success") =>
+        new BaseResponse<T>(true, message, data);
+
+    public static BaseResponse<T> Failure(string message = "Failed") =>
+        new BaseResponse<T>(false, message);
+
+    public static BaseResponse<T> Failure(string message, List<string> errors) =>
+        new BaseResponse<T>(false, message, errors);
 }
 
 public class ErrorResponse

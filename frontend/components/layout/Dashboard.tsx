@@ -6,8 +6,13 @@ import { useAuth } from "@/lib/contexts/AuthContext";
 import { useCall, CallState } from "@/lib/contexts/CallContext";
 import { Contact } from "@/lib/types";
 import { apiService } from "@/lib/services/api.service";
+import { signalRService } from "@/lib/services/signalr.service";
+import { messageHubService } from "@/lib/services/messageHub.service";
 import IncomingCallModal from "../call/IncomingCallModal";
 import ActiveCallView from "../call/ActiveCallView";
+import ChatBox from "../chat/ChatBox";
+import MeetingInviteModal from "../meeting/MeetingInviteModal";
+import { soundManager } from "@/lib/utils/soundManager";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -15,6 +20,7 @@ export default function Dashboard() {
   const { callState, initiateCall } = useCall();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [unreadCounts, setUnreadCounts] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showCreateMeeting, setShowCreateMeeting] = useState(false);
@@ -24,13 +30,57 @@ export default function Dashboard() {
   const [meetingCode, setMeetingCode] = useState("");
   const [createdMeetingCode, setCreatedMeetingCode] = useState("");
   const [isPublicMeeting, setIsPublicMeeting] = useState(false);
+  const [activeChatContact, setActiveChatContact] = useState<{ id: number; name: string } | null>(null);
+  const [meetingInvite, setMeetingInvite] = useState<{
+    meetingCode: string;
+    meetingTitle: string;
+    inviterName: string;
+  } | null>(null);
 
   useEffect(() => {
     loadData();
-  }, []);
+
+    // Listen for meeting invites
+    const handleMeetingInvite = (invite: any) => {
+      console.log("[Dashboard] Received meeting invite:", invite);
+      setMeetingInvite({
+        meetingCode: invite.meetingCode,
+        meetingTitle: invite.meetingTitle,
+        inviterName: invite.inviterName,
+      });
+
+      // Play meeting ringing sound in loop
+      soundManager.playLoop("meetingRinging");
+    };
+
+    // Listen for incoming direct messages
+    const handleReceiveDirectMessage = (message: any) => {
+      console.log("[Dashboard] Received direct message:", message);
+
+      // Only play sound and update count if chat is not open for this contact
+      if (!activeChatContact || activeChatContact.id !== message.senderId) {
+        // Play incoming message sound
+        soundManager.play("incomingMessage");
+
+        // Update unread count
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [message.senderId]: (prev[message.senderId] || 0) + 1,
+        }));
+      }
+    };
+
+    signalRService.on("MeetingInvite", handleMeetingInvite);
+    messageHubService.on("ReceiveDirectMessage", handleReceiveDirectMessage);
+
+    return () => {
+      signalRService.off("MeetingInvite", handleMeetingInvite);
+      messageHubService.off("ReceiveDirectMessage", handleReceiveDirectMessage);
+    };
+  }, [activeChatContact]);
 
   const loadData = async () => {
-    await Promise.all([loadContacts(), loadPendingRequests()]);
+    await Promise.all([loadContacts(), loadPendingRequests(), loadUnreadCounts()]);
   };
 
   const loadContacts = async () => {
@@ -54,6 +104,17 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Error loading pending requests:", error);
+    }
+  };
+
+  const loadUnreadCounts = async () => {
+    try {
+      const response = await apiService.getUnreadMessageCounts();
+      if (response.status && response.data) {
+        setUnreadCounts(response.data);
+      }
+    } catch (error) {
+      console.error("Error loading unread counts:", error);
     }
   };
 
@@ -161,6 +222,19 @@ export default function Dashboard() {
     logout();
     router.push("/");
   };
+
+  // Show meeting invite modal if there's an invite
+  if (meetingInvite) {
+    return (
+      <MeetingInviteModal
+        meetingCode={meetingInvite.meetingCode}
+        meetingTitle={meetingInvite.meetingTitle}
+        inviterName={meetingInvite.inviterName}
+        onAccept={() => setMeetingInvite(null)}
+        onReject={() => setMeetingInvite(null)}
+      />
+    );
+  }
 
   // Show call UI when in a call
   if (callState === CallState.IncomingCall) {
@@ -406,12 +480,22 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                      <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center text-white text-xl font-bold relative">
                         {contact.contactUser?.displayName?.charAt(0).toUpperCase() || contact.contactUser?.userName?.charAt(0).toUpperCase() || "?"}
+                        {unreadCounts[contact.contactUserId] > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
+                            {unreadCounts[contact.contactUserId] > 9 ? "9+" : unreadCounts[contact.contactUserId]}
+                          </span>
+                        )}
                       </div>
                       <div>
-                        <h3 className="text-lg font-medium text-white">
+                        <h3 className="text-lg font-medium text-white flex items-center gap-2">
                           {contact.contactUser?.displayName || contact.contactUser?.userName || "Unknown User"}
+                          {unreadCounts[contact.contactUserId] > 0 && (
+                            <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                              {unreadCounts[contact.contactUserId]} new
+                            </span>
+                          )}
                         </h3>
                         <p className="text-sm text-gray-400">
                           @{contact.contactUser?.userName || "unknown"}
@@ -426,6 +510,24 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => setActiveChatContact({
+                          id: contact.contactUserId,
+                          name: contact.contactUser?.displayName || contact.contactUser?.userName || "Unknown"
+                        })}
+                        className="p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors duration-200"
+                        title="Send message"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                          <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                        </svg>
+                      </button>
                       <button
                         onClick={() => handleCall(contact.contactUserId, false)}
                         className="p-3 bg-green-600 hover:bg-green-700 text-white rounded-full transition-colors duration-200"
@@ -463,8 +565,26 @@ export default function Dashboard() {
         </div>
 
         {/* Info Box */}
-        
+
       </main>
+
+      {/* Chat Box - Fixed position overlay */}
+      {activeChatContact && (
+        <div className="fixed bottom-4 right-4 w-96 h-[600px] z-50 shadow-2xl">
+          <ChatBox
+            contactUserId={activeChatContact.id}
+            contactName={activeChatContact.name}
+            onClose={() => setActiveChatContact(null)}
+            onMessagesRead={(contactUserId) => {
+              setUnreadCounts((prev) => {
+                const updated = { ...prev };
+                delete updated[contactUserId];
+                return updated;
+              });
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

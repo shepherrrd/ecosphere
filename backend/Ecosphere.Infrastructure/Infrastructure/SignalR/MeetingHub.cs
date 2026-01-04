@@ -30,6 +30,10 @@ public class MeetingHub : Hub
     {
         var userId = GetUserId();
         _logger.LogInformation($"[MeetingHub] User {userId} connected with connectionId {Context.ConnectionId}");
+
+        // Add to user group for receiving invites
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
+
         await base.OnConnectedAsync();
     }
 
@@ -467,6 +471,73 @@ public class MeetingHub : Hub
         });
 
         _logger.LogInformation($"[MeetingHub] Host {userId} rejected join request {requestId}");
+    }
+
+    /// <summary>
+    /// Invite a user to join the meeting
+    /// </summary>
+    public async Task InviteUserToMeeting(string meetingCode, long invitedUserId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            // Verify meeting exists and user is a participant
+            var meeting = await _context.Meetings
+                .FirstOrDefaultAsync(m => m.MeetingCode == meetingCode);
+
+            if (meeting == null)
+            {
+                await Clients.Caller.SendAsync("Error", "Meeting not found");
+                return;
+            }
+
+            // Check if sender is in the meeting
+            var isParticipant = await _context.MeetingParticipants
+                .AnyAsync(mp => mp.MeetingId == meeting.Id && mp.UserId == userId);
+
+            if (!isParticipant)
+            {
+                await Clients.Caller.SendAsync("Error", "You must be in the meeting to invite others");
+                return;
+            }
+
+            // Check if they are contacts
+            var areContacts = await _context.Contacts
+                .AnyAsync(c =>
+                    (c.UserId == userId && c.ContactUserId == invitedUserId) ||
+                    (c.UserId == invitedUserId && c.ContactUserId == userId));
+
+            if (!areContacts)
+            {
+                await Clients.Caller.SendAsync("Error", "You can only invite your contacts");
+                return;
+            }
+
+            // Get inviter info
+            var inviter = await _context.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.UserName, u.DisplayName })
+                .FirstAsync();
+
+            // Send invite to the user
+            await Clients.Group($"user_{invitedUserId}").SendAsync("MeetingInvite", new
+            {
+                MeetingCode = meetingCode,
+                MeetingTitle = meeting.Title,
+                InviterId = userId,
+                InviterName = inviter.DisplayName ?? inviter.UserName,
+                MeetingId = meeting.Id,
+                IsPublic = meeting.IsPublic
+            });
+
+            _logger.LogInformation($"[MeetingHub] User {userId} invited user {invitedUserId} to meeting {meetingCode}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"[MeetingHub] Error inviting user {invitedUserId} to meeting {meetingCode}");
+            await Clients.Caller.SendAsync("Error", "Failed to send meeting invite");
+        }
     }
 
     private long GetUserId()

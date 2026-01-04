@@ -9,21 +9,19 @@ namespace Ecosphere.Application.Contacts;
 
 public class GetContactsRequest : IRequest<BaseResponse<List<ContactDto>>>
 {
+    internal long UserId { get; set; } // Set by controller, not by client
 }
 
 public class GetContactsRequestHandler : IRequestHandler<GetContactsRequest, BaseResponse<List<ContactDto>>>
 {
     private readonly EcosphereDbContext _context;
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<GetContactsRequestHandler> _logger;
 
     public GetContactsRequestHandler(
         EcosphereDbContext context,
-        IHttpContextAccessor httpContextAccessor,
         ILogger<GetContactsRequestHandler> logger)
     {
         _context = context;
-        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
     }
 
@@ -31,10 +29,19 @@ public class GetContactsRequestHandler : IRequestHandler<GetContactsRequest, Bas
     {
         try
         {
-            var userId = long.Parse(_httpContextAccessor.HttpContext!.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            // Step 1: Validate user exists
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
 
+            if (user is null)
+            {
+                _logger.LogWarning("GetContacts => User with id {UserId} was not found", request.UserId);
+                return new BaseResponse<List<ContactDto>>(false, "User account not found. Please login again.");
+            }
+
+            // Step 2: Get contacts
             var contacts = await _context.Contacts
-                .Where(c => c.UserId == userId)
+                .Where(c => c.UserId == request.UserId)
                 .Select(c => new ContactDto
                 {
                     Id = c.Id,

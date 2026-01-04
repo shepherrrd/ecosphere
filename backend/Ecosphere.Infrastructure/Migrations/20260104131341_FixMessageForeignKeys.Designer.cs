@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Ecosphere.Infrastructure.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Ecosphere.Infrastructure.Migrations
 {
     [DbContext(typeof(EcosphereDbContext))]
-    partial class EcosphereDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260104131341_FixMessageForeignKeys")]
+    partial class FixMessageForeignKeys
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

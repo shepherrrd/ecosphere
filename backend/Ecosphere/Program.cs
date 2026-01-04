@@ -1,5 +1,7 @@
 using Ecosphere.Infrastructure.Data.Models;
 using Ecosphere.Infrastructure.Infrastructure.Auth;
+using Ecosphere.Infrastructure.Infrastructure.Extensions;
+using Ecosphere.Infrastructure.Infrastructure.Middleware;
 using Ecosphere.Infrastructure.Infrastructure.Persistence;
 using Ecosphere.Infrastructure.Infrastructure.Services;
 using Ecosphere.Infrastructure.Infrastructure.SignalR;
@@ -22,6 +24,9 @@ builder.Services.RegisterAuthentication(builder.Configuration);
 builder.Services.RegisterAuthorization();
 builder.Services.RegisterJwt();
 builder.Services.RegisterServices();
+
+// Rate Limiting Configuration
+builder.Services.AddRateLimiting(builder.Configuration);
 
 // MediatR for CQRS
 builder.Services.AddMediatR(cfg =>
@@ -60,8 +65,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("EcosphereCorsPolicy", policy =>
     {
         policy.WithOrigins(
-                "http://localhost:3000" ,
-                "http://192.168.106:3000"  ,
+                "http://localhost:3000", 
+                "http://192.168.106" ,
                 "https://2ndpw4s3-3000.uks1.devtunnels.ms",
                 "https://meet.shepherrd.dev"    
               )
@@ -136,11 +141,18 @@ app.UseCors("EcosphereCorsPolicy");
 
 //app.UseHttpsRedirection();
 
+// Client Validation Middleware (validates IP and Client ID headers)
+app.UseMiddleware<ClientValidationMiddleware>();
+
+// Rate Limiting Middleware
+app.UseRateLimiting();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHub<CallHub>("/hubs/callHub");
 app.MapHub<MeetingHub>("/hubs/meetingHub");
+app.MapHub<MessageHub>("/hubs/messageHub");
 app.MapHub<SFUHub>("/hubs/sfuHub");
 
 app.MapControllers();

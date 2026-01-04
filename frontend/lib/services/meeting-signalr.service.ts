@@ -109,6 +109,11 @@ class MeetingSignalRService {
   private registerStoredHandlers(): void {
     if (!this.connection) return;
 
+    // Register global error handler to catch backend error messages
+    this.connection.on("Error", (message: string) => {
+      console.error("[MeetingSignalR] Server error:", message);
+    });
+
     for (const [event, handlers] of this.eventHandlers.entries()) {
       for (const handler of handlers) {
         this.connection.on(event, handler);
@@ -200,6 +205,14 @@ class MeetingSignalRService {
     }
 
     await this.connection.invoke("RejectJoinRequest", requestId);
+  }
+
+  async invoke<T = any>(methodName: string, ...args: any[]): Promise<T> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
+      throw new Error("Not connected to meeting hub");
+    }
+
+    return await this.connection.invoke<T>(methodName, ...args);
   }
 
   async disconnect(): Promise<void> {

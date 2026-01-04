@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Ecosphere.Infrastructure.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Ecosphere.Infrastructure.Migrations
 {
     [DbContext(typeof(EcosphereDbContext))]
-    partial class EcosphereDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260103211809_MessagindSupport")]
+    partial class MessagindSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -61,20 +64,20 @@ namespace Ecosphere.Infrastructure.Migrations
                         new
                         {
                             Id = 1L,
-                            ConcurrencyStamp = "35cf2047-7915-4d29-b8b0-f67218df7eab",
+                            ConcurrencyStamp = "f6e64f02-efc8-4abd-9729-9ae208481c2e",
                             Name = "User",
                             NormalizedName = "USER",
-                            TimeCreated = new DateTimeOffset(new DateTime(2026, 1, 4, 13, 13, 41, 495, DateTimeKind.Unspecified).AddTicks(8090), new TimeSpan(0, 0, 0, 0, 0)),
-                            TimeUpdated = new DateTimeOffset(new DateTime(2026, 1, 4, 13, 13, 41, 495, DateTimeKind.Unspecified).AddTicks(8250), new TimeSpan(0, 0, 0, 0, 0))
+                            TimeCreated = new DateTimeOffset(new DateTime(2026, 1, 3, 21, 18, 9, 454, DateTimeKind.Unspecified).AddTicks(4420), new TimeSpan(0, 0, 0, 0, 0)),
+                            TimeUpdated = new DateTimeOffset(new DateTime(2026, 1, 3, 21, 18, 9, 454, DateTimeKind.Unspecified).AddTicks(4580), new TimeSpan(0, 0, 0, 0, 0))
                         },
                         new
                         {
                             Id = 2L,
-                            ConcurrencyStamp = "297598dd-c4ed-49e6-ab00-a38d10e2af0f",
+                            ConcurrencyStamp = "14229559-2c4b-4dd5-8f57-8f0da624f29b",
                             Name = "Admin",
                             NormalizedName = "ADMIN",
-                            TimeCreated = new DateTimeOffset(new DateTime(2026, 1, 4, 13, 13, 41, 495, DateTimeKind.Unspecified).AddTicks(8410), new TimeSpan(0, 0, 0, 0, 0)),
-                            TimeUpdated = new DateTimeOffset(new DateTime(2026, 1, 4, 13, 13, 41, 495, DateTimeKind.Unspecified).AddTicks(8410), new TimeSpan(0, 0, 0, 0, 0))
+                            TimeCreated = new DateTimeOffset(new DateTime(2026, 1, 3, 21, 18, 9, 454, DateTimeKind.Unspecified).AddTicks(4720), new TimeSpan(0, 0, 0, 0, 0)),
+                            TimeUpdated = new DateTimeOffset(new DateTime(2026, 1, 3, 21, 18, 9, 454, DateTimeKind.Unspecified).AddTicks(4720), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });
 
@@ -545,13 +548,22 @@ namespace Ecosphere.Infrastructure.Migrations
                     b.Property<long?>("MeetingId")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("MeetingId1")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("ReceiverId")
                         .HasColumnType("bigint");
 
+                    b.Property<long>("ReceiverId1")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("SenderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SenderId1")
                         .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("SentAt")
@@ -568,7 +580,13 @@ namespace Ecosphere.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MeetingId1");
+
                     b.HasIndex("ReceiverId");
+
+                    b.HasIndex("ReceiverId1");
+
+                    b.HasIndex("SenderId1");
 
                     b.HasIndex("MeetingId", "SentAt");
 
@@ -860,20 +878,36 @@ namespace Ecosphere.Infrastructure.Migrations
 
             modelBuilder.Entity("Ecosphere.Infrastructure.Data.Entities.Message", b =>
                 {
-                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.Meeting", "Meeting")
+                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.Meeting", null)
                         .WithMany()
                         .HasForeignKey("MeetingId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.EcosphereUser", "Receiver")
+                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.Meeting", "Meeting")
+                        .WithMany()
+                        .HasForeignKey("MeetingId1");
+
+                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.EcosphereUser", null)
                         .WithMany()
                         .HasForeignKey("ReceiverId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.EcosphereUser", "Sender")
+                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.EcosphereUser", "Receiver")
+                        .WithMany()
+                        .HasForeignKey("ReceiverId1")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.EcosphereUser", null)
                         .WithMany()
                         .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ecosphere.Infrastructure.Data.Entities.EcosphereUser", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId1")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

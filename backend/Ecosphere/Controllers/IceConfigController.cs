@@ -1,4 +1,5 @@
 using Ecosphere.Infrastructure.Data.Models;
+using Ecosphere.Infrastructure.Infrastructure.Auth;
 using Ecosphere.Infrastructure.Infrastructure.Services.Interfaces;
 using Ecosphere.Infrastructure.Infrastructure.Utilities;
 using Microsoft.AspNetCore.Authorization;
@@ -8,6 +9,7 @@ namespace Ecosphere.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class IceConfigController : ControllerBase
 {
     private readonly IStunTurnServer _stunTurnServer;
@@ -25,12 +27,13 @@ public class IceConfigController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetIceServers()
+    [AuthorizeRole("User")]
+    public async Task<IActionResult> GetIceServers(CancellationToken cancellationToken)
     {
         try
         {
-            // Get authenticated user ID from JWT token (or use default for testing)
-            var userId = User.Identity?.GetProfileId() ?? 1;
+            // Get authenticated user ID from JWT token
+            var userId = User.Identity?.GetProfileId() ?? 0;
 
             var iceServers = new List<IceServerConfig>();
 
@@ -79,6 +82,7 @@ public class IceConfigController : ControllerBase
     }
 
     [HttpGet("status")]
+    [AuthorizeRole("User")]
     public IActionResult GetServerStatus()
     {
         var status = new

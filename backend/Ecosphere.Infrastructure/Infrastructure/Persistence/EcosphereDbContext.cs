@@ -21,6 +21,7 @@ public class EcosphereDbContext : IdentityDbContext<EcosphereUser, ApplicationRo
     public DbSet<MeetingJoinRequest> MeetingJoinRequests { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<TurnCredentials> TurnCredentials { get; set; }
+    public DbSet<Message> Messages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -136,6 +137,30 @@ public class EcosphereDbContext : IdentityDbContext<EcosphereUser, ApplicationRo
             .WithMany()
             .HasForeignKey(rt => rt.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Message>()
+            .HasOne(m => m.Sender)
+            .WithMany()
+            .HasForeignKey(m => m.SenderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Message>()
+            .HasOne(m => m.Receiver)
+            .WithMany()
+            .HasForeignKey(m => m.ReceiverId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Message>()
+            .HasOne(m => m.Meeting)
+            .WithMany()
+            .HasForeignKey(m => m.MeetingId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Entity<Message>()
+            .HasIndex(m => new { m.SenderId, m.ReceiverId, m.SentAt });
+
+        builder.Entity<Message>()
+            .HasIndex(m => new { m.MeetingId, m.SentAt });
 
         builder.Seed();
     }
