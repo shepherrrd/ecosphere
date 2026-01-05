@@ -73,14 +73,18 @@ public class RegistrationRequestHandler : IRequestHandler<RegistrationRequest, B
     {
         try
         {
+            // Normalize email and username
+            var normalizedEmail = request.Email?.Trim().ToLower() ?? string.Empty;
+            var normalizedUserName = request.UserName?.Trim().ToLower() ?? string.Empty;
+
             var validationErrors = new List<string>();
 
             // Check if user already exists
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+            var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
             if (existingUser != null)
                 validationErrors.Add("Email already registered");
 
-            var existingUserName = await _userManager.FindByNameAsync(request.UserName);
+            var existingUserName = await _userManager.FindByNameAsync(normalizedUserName);
             if (existingUserName != null)
                 validationErrors.Add("Username already taken");
 
@@ -93,9 +97,9 @@ public class RegistrationRequestHandler : IRequestHandler<RegistrationRequest, B
             // Create new user
             var user = new EcosphereUser
             {
-                UserName = request.UserName,
-                Email = request.Email,
-                DisplayName = request.DisplayName ?? request.UserName,
+                UserName = normalizedUserName,
+                Email = normalizedEmail,
+                DisplayName = request.DisplayName ?? normalizedUserName,
                 IsOnline = true,
                 LastSeen = DateTimeOffset.UtcNow,
                 TimeCreated = DateTimeOffset.UtcNow,

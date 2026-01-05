@@ -61,7 +61,10 @@ public class LoginRequestHandler : IRequestHandler<LoginRequest, BaseResponse<Lo
     {
         try
         {
-            var user = await _userManager.FindByEmailAsync(request.Email);
+            // Normalize email
+            var normalizedEmail = request.Email?.Trim().ToLower() ?? string.Empty;
+
+            var user = await _userManager.FindByEmailAsync(normalizedEmail);
             if (user == null)
                 return new BaseResponse<LoginResponse>(false, "Invalid email or password");
 
