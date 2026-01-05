@@ -2,53 +2,13 @@ class SoundManager {
   private sounds: Map<string, HTMLAudioElement>;
   private currentLoopingSound: HTMLAudioElement | null = null;
   private initialized: boolean = false;
-  private audioEnabled: boolean = false;
 
   constructor() {
     this.sounds = new Map();
     // Don't initialize during SSR
     if (typeof window !== 'undefined') {
       this.initializeSounds();
-      this.setupAudioUnlock();
     }
-  }
-
-  /**
-   * Setup audio unlock - browsers require user interaction before playing audio
-   */
-  private setupAudioUnlock() {
-    if (typeof window === 'undefined') return;
-
-    const unlockAudio = () => {
-      this.audioEnabled = true;
-      // Unlock audio context by attempting silent play/pause
-      this.sounds.forEach((sound) => {
-        // Mute the sound temporarily
-        const originalVolume = sound.volume;
-        sound.volume = 0;
-
-        const playPromise = sound.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            sound.pause();
-            sound.currentTime = 0;
-            sound.volume = originalVolume; // Restore volume
-          }).catch(() => {
-            sound.volume = originalVolume; // Restore volume even on error
-          });
-        }
-      });
-
-      // Remove listeners after first interaction
-      document.removeEventListener('click', unlockAudio);
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('keydown', unlockAudio);
-    };
-
-    // Listen for first user interaction
-    document.addEventListener('click', unlockAudio, { once: true });
-    document.addEventListener('touchstart', unlockAudio, { once: true });
-    document.addEventListener('keydown', unlockAudio, { once: true });
   }
 
   private initializeSounds() {
