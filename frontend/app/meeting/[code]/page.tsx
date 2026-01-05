@@ -43,7 +43,6 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const connectionRetryIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Wait for user to be loaded from Auth context before initializing meeting
@@ -149,39 +148,11 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       }
 
       setIsLoading(false);
-
-      // Start periodic connection checker to retry failed connections
-      startConnectionMonitor();
     } catch (error) {
       console.error("Error initializing meeting:", error);
       alert("Failed to join meeting");
       router.push("/dashboard");
     }
-  };
-
-  const startConnectionMonitor = () => {
-    // Check connections every 10 seconds and retry failed ones
-    connectionRetryIntervalRef.current = setInterval(() => {
-      peerConnectionsRef.current.forEach(async (pc, connectionId) => {
-        // Only retry if connection is truly failed (not just temporarily disconnected)
-        if (pc.iceConnectionState === 'failed') {
-          console.log(`[WebRTC] Monitor detected failed connection for ${connectionId}, attempting restart...`);
-
-          // Find the participant to get userId
-          const participant = participants.find(p => p.connectionId === connectionId);
-          if (participant && localStreamRef.current) {
-            try {
-              const offer = await pc.createOffer({ iceRestart: true });
-              await pc.setLocalDescription(offer);
-              await meetingSignalRService.sendOffer(meetingCode, participant.userId, offer.sdp!);
-              console.log(`[WebRTC] Monitor sent ICE restart offer for ${connectionId}`);
-            } catch (error) {
-              console.error(`[WebRTC] Monitor failed to restart connection for ${connectionId}:`, error);
-            }
-          }
-        }
-      });
-    }, 10000); // Check every 10 seconds
   };
 
   const setupSignalRHandlers = () => {
@@ -293,29 +264,8 @@ export default function MeetingPage({ params }: MeetingPageProps) {
     };
 
     // Handle ICE connection state
-    pc.oniceconnectionstatechange = async () => {
+    pc.oniceconnectionstatechange = () => {
       console.log("[WebRTC] ICE connection state:", pc.iceConnectionState, "for", connectionId);
-
-      // Only retry on truly failed connections, not temporary disconnects
-      if (pc.iceConnectionState === 'failed') {
-        console.log("[WebRTC] Connection failed, attempting ICE restart for", connectionId);
-
-        // Wait a bit before retrying
-        setTimeout(async () => {
-          // Double-check it's still failed before retrying
-          if (pc.iceConnectionState === 'failed') {
-            try {
-              // Restart ICE
-              const offer = await pc.createOffer({ iceRestart: true });
-              await pc.setLocalDescription(offer);
-              await meetingSignalRService.sendOffer(meetingCode, userId, offer.sdp!);
-              console.log("[WebRTC] ICE restart offer sent for", connectionId);
-            } catch (error) {
-              console.error("[WebRTC] Failed to restart ICE:", error);
-            }
-          }
-        }, 3000); // Wait 3 seconds before retry
-      }
     };
 
     // Handle connection state
@@ -392,29 +342,40 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       return;
     }
 
-    
-    const existingPc = peerConnectionsRef.current.get(data.fromConnectionId);
-    if (existingPc && existingPc.signalingState === "have-local-offer") {
-      console.warn("[WebRTC] Unexpected glare condition! Both sides sent offers (rare with cascading pattern)");
 
-      if (user && user.id < data.fromUserId) {
-        console.log("[WebRTC] We have lower ID, keeping our offer");
-        return; 
+    const existingPc = peerConnectionsRef.current.get(data.fromConnectionId);
+
+    // If connection already exists and is connected or connecting, ignore the offer
+    if (existingPc) {
+      const state = existingPc.iceConnectionState;
+      if (state === 'connected' || state === 'completed') {
+        console.log("[WebRTC] Connection already established for", data.fromConnectionId, "- ignoring offer");
+        return;
+      }
+
+      // Only handle glare condition if we're in the middle of negotiation
+      if (existingPc.signalingState === "have-local-offer") {
+        console.warn("[WebRTC] Glare condition! Both sides sent offers");
+
+        if (user && user.id < data.fromUserId) {
+          console.log("[WebRTC] We have lower ID, keeping our offer");
+          return;
+        } else {
+          console.log("[WebRTC] They have lower ID, accepting their offer");
+          existingPc.close();
+          peerConnectionsRef.current.delete(data.fromConnectionId);
+          setPeerConnections(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(data.fromConnectionId);
+            return newMap;
+          });
+        }
       } else {
-        console.log("[WebRTC] They have lower ID, discarding our offer, accepting theirs");
-        // Close existing connection and create new one
+        // Connection exists but not established yet, close and recreate
+        console.log("[WebRTC] Connection exists but not established, recreating");
         existingPc.close();
         peerConnectionsRef.current.delete(data.fromConnectionId);
-        setPeerConnections(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(data.fromConnectionId);
-          return newMap;
-        });
       }
-    } else if (existingPc) {
-      console.log("[WebRTC] Peer connection already exists for", data.fromConnectionId, "- closing and recreating");
-      existingPc.close();
-      peerConnectionsRef.current.delete(data.fromConnectionId);
     }
 
     const pc = await createPeerConnection(data.fromUserId, data.fromConnectionId, stream, false);
@@ -550,12 +511,6 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   };
 
   const cleanup = async () => {
-    // Stop connection monitor
-    if (connectionRetryIntervalRef.current) {
-      clearInterval(connectionRetryIntervalRef.current);
-      connectionRetryIntervalRef.current = null;
-    }
-
     // Stop local stream
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());

@@ -21,15 +21,20 @@ class SoundManager {
 
     const unlockAudio = () => {
       this.audioEnabled = true;
-      // Try to play and immediately pause a silent audio to unlock
+      // Unlock audio context by attempting silent play/pause
       this.sounds.forEach((sound) => {
+        // Mute the sound temporarily
+        const originalVolume = sound.volume;
+        sound.volume = 0;
+
         const playPromise = sound.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
             sound.pause();
             sound.currentTime = 0;
+            sound.volume = originalVolume; // Restore volume
           }).catch(() => {
-            // Ignore errors during unlock
+            sound.volume = originalVolume; // Restore volume even on error
           });
         }
       });
