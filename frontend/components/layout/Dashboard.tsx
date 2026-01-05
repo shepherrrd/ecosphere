@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [createdMeetingCode, setCreatedMeetingCode] = useState("");
   const [isPublicMeeting, setIsPublicMeeting] = useState(false);
   const [activeChatContact, setActiveChatContact] = useState<{ id: number; name: string } | null>(null);
+  const [isChatVisible, setIsChatVisible] = useState(false);
   const [meetingInvite, setMeetingInvite] = useState<{
     meetingCode: string;
     meetingTitle: string;
@@ -201,7 +202,14 @@ export default function Dashboard() {
         // Redirect to meeting room
         router.push(`/meeting/${meetingCode}`);
       } else {
-        alert(response.message);
+        // If already have a pending request, just go to the meeting page
+        if (response.message?.includes("already have a pending join request") ||
+            response.message?.includes("already in this meeting")) {
+          console.log("Already joined or pending, redirecting to meeting page");
+          router.push(`/meeting/${meetingCode}`);
+        } else {
+          alert(response.message);
+        }
       }
     } catch (error) {
       console.error("Error joining meeting:", error);
@@ -511,10 +519,13 @@ export default function Dashboard() {
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setActiveChatContact({
-                          id: contact.contactUserId,
-                          name: contact.contactUser?.displayName || contact.contactUser?.userName || "Unknown"
-                        })}
+                        onClick={() => {
+                          setActiveChatContact({
+                            id: contact.contactUserId,
+                            name: contact.contactUser?.displayName || contact.contactUser?.userName || "Unknown"
+                          });
+                          setIsChatVisible(true);
+                        }}
                         className="p-3 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors duration-200"
                         title="Send message"
                       >
@@ -570,11 +581,13 @@ export default function Dashboard() {
 
       {/* Chat Box - Fixed position overlay */}
       {activeChatContact && (
-        <div className="fixed bottom-4 right-4 w-96 h-[600px] z-50 shadow-2xl">
+        <div className={`fixed bottom-4 right-4 w-96 h-[600px] z-50 shadow-2xl transition-transform duration-300 ${
+          isChatVisible ? 'translate-x-0' : 'translate-x-[120%]'
+        }`}>
           <ChatBox
             contactUserId={activeChatContact.id}
             contactName={activeChatContact.name}
-            onClose={() => setActiveChatContact(null)}
+            onClose={() => setIsChatVisible(false)}
             onMessagesRead={(contactUserId) => {
               setUnreadCounts((prev) => {
                 const updated = { ...prev };

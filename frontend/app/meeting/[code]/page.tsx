@@ -43,8 +43,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const pendingIceCandidatesRef = useRef<Map<string, RTCIceCandidate[]>>(new Map());
   const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const initializingRef = useRef<boolean>(false);
-  const initializedRef = useRef<boolean>(false);
+  const connectionRetryIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Wait for user to be loaded from Auth context before initializing meeting
@@ -53,23 +52,22 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       return;
     }
 
-    // Prevent double initialization in React Strict Mode
-    if (initializingRef.current || initializedRef.current) {
-      console.log("[WebRTC] Already initializing or initialized, skipping duplicate call");
-      return;
-    }
+    let isMounted = true;
+    let hasInitialized = false;
 
-    initializingRef.current = true;
-    initializeMeeting();
+    const init = async () => {
+      if (!isMounted || hasInitialized) return;
+      hasInitialized = true;
+      await initializeMeeting();
+    };
+
+    init();
 
     return () => {
-      // Only cleanup if we're actually unmounting (navigating away)
-      // Don't cleanup during React Strict Mode's double-mount
-      if (initializedRef.current) {
-        cleanup();
-      }
+      isMounted = false;
+      cleanup();
     };
-  }, [meetingCode, user]);
+  }, [user]); // Run when user becomes available
 
   const initializeMeeting = async () => {
     try {
@@ -77,7 +75,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       const response = await apiService.getMeeting(meetingCode);
       if (!response.status || !response.data) {
         alert("Meeting not found");
-        router.push("/");
+        router.push("/dashboard");
         return;
       }
 
@@ -151,13 +149,39 @@ export default function MeetingPage({ params }: MeetingPageProps) {
       }
 
       setIsLoading(false);
-      initializedRef.current = true;
+
+      // Start periodic connection checker to retry failed connections
+      startConnectionMonitor();
     } catch (error) {
       console.error("Error initializing meeting:", error);
-      initializingRef.current = false; // Reset on error so user can retry
       alert("Failed to join meeting");
-      router.push("/");
+      router.push("/dashboard");
     }
+  };
+
+  const startConnectionMonitor = () => {
+    // Check connections every 10 seconds and retry failed ones
+    connectionRetryIntervalRef.current = setInterval(() => {
+      peerConnectionsRef.current.forEach(async (pc, connectionId) => {
+        // Only retry if connection is truly failed (not just temporarily disconnected)
+        if (pc.iceConnectionState === 'failed') {
+          console.log(`[WebRTC] Monitor detected failed connection for ${connectionId}, attempting restart...`);
+
+          // Find the participant to get userId
+          const participant = participants.find(p => p.connectionId === connectionId);
+          if (participant && localStreamRef.current) {
+            try {
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              await meetingSignalRService.sendOffer(meetingCode, participant.userId, offer.sdp!);
+              console.log(`[WebRTC] Monitor sent ICE restart offer for ${connectionId}`);
+            } catch (error) {
+              console.error(`[WebRTC] Monitor failed to restart connection for ${connectionId}:`, error);
+            }
+          }
+        }
+      });
+    }, 10000); // Check every 10 seconds
   };
 
   const setupSignalRHandlers = () => {
@@ -269,13 +293,40 @@ export default function MeetingPage({ params }: MeetingPageProps) {
     };
 
     // Handle ICE connection state
-    pc.oniceconnectionstatechange = () => {
+    pc.oniceconnectionstatechange = async () => {
       console.log("[WebRTC] ICE connection state:", pc.iceConnectionState, "for", connectionId);
+
+      // Only retry on truly failed connections, not temporary disconnects
+      if (pc.iceConnectionState === 'failed') {
+        console.log("[WebRTC] Connection failed, attempting ICE restart for", connectionId);
+
+        // Wait a bit before retrying
+        setTimeout(async () => {
+          // Double-check it's still failed before retrying
+          if (pc.iceConnectionState === 'failed') {
+            try {
+              // Restart ICE
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              await meetingSignalRService.sendOffer(meetingCode, userId, offer.sdp!);
+              console.log("[WebRTC] ICE restart offer sent for", connectionId);
+            } catch (error) {
+              console.error("[WebRTC] Failed to restart ICE:", error);
+            }
+          }
+        }, 3000); // Wait 3 seconds before retry
+      }
     };
 
     // Handle connection state
     pc.onconnectionstatechange = () => {
       console.log("[WebRTC] Connection state:", pc.connectionState, "for", connectionId);
+
+      if (pc.connectionState === 'connected') {
+        console.log("[WebRTC] Peer connection established successfully for", connectionId);
+      } else if (pc.connectionState === 'failed') {
+        console.log("[WebRTC] Peer connection failed for", connectionId);
+      }
     };
 
     // Store peer connection in both state and ref
@@ -454,7 +505,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
   const handleJoinRequestRejected = (data: any) => {
     console.log("Join request rejected:", data);
     alert(data.message || "Your join request was rejected");
-    router.push("/");
+    router.push("/dashboard");
   };
 
   const approveJoinRequest = async (requestId: number) => {
@@ -495,10 +546,16 @@ export default function MeetingPage({ params }: MeetingPageProps) {
 
   const leaveMeeting = async () => {
     await cleanup();
-    router.push("/");
+    router.push("/dashboard");
   };
 
   const cleanup = async () => {
+    // Stop connection monitor
+    if (connectionRetryIntervalRef.current) {
+      clearInterval(connectionRetryIntervalRef.current);
+      connectionRetryIntervalRef.current = null;
+    }
+
     // Stop local stream
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
@@ -587,7 +644,7 @@ export default function MeetingPage({ params }: MeetingPageProps) {
           <div className="text-white text-xl mb-4">Waiting for host approval...</div>
           <p className="text-gray-400">The host needs to approve your join request</p>
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/dashboard")}
             className="mt-6 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded"
           >
             Cancel
